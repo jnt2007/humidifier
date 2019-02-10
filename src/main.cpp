@@ -23,11 +23,14 @@
 
 // Update these with values suitable for your network.
 
-const char* ssid = "MikroTik";
-const char* password = "Instagram";
+const char* ssid = "ssid";
+const char* password = "password";
 const char* mqtt_server = "192.168.88.221";
+const char* mqtt_user = "user";
+const char* mqtt_password = "pass";
 const char* outTopic = "humidifier/state";
 String state;
+String new_state;
 String target_state;
 bool do_change_state = false;
 
@@ -36,7 +39,6 @@ PubSubClient client(espClient);
 long lastMsg = 0;
 long lastPublish = 0;
 char msg[50];
-// int value = 0;
 int d1;
 int d2;
 int d3;
@@ -79,7 +81,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   if (state != "empty") {
     // Switch state if updated
     if (res != state) {
-      if (res == "off" || res == "0" || res == "1" || res == "2" || res == "3") {
+      if (res == "0" || res == "1" || res == "2" || res == "3") {
         do_change_state = true;
         target_state = res;
       } else {
@@ -90,11 +92,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
     } else {
       do_change_state = false;
-
     }
+
   } else {
     do_change_state = false;
-
   }
 
 }
@@ -107,7 +108,7 @@ void reconnect() {
     String clientId = "ESP8266Client-";
     clientId += String(random(0xffff), HEX);
     // Attempt to connect
-    if (client.connect(clientId.c_str())) {
+    if (client.connect(clientId.c_str(), mqtt_user, mqtt_password)) {
       Serial.println("connected");
       // Once connected, publish an announcement...
       client.publish(outTopic, "hello world");
@@ -123,29 +124,38 @@ void reconnect() {
   }
 }
 
+void report_state() {
+  char copy[50];
+  state.toCharArray(copy, 50);
+  client.publish(outTopic, copy);
+}
+
 void read_state() {
   d1 = digitalRead(D5);
   d2 = digitalRead(D6);
   d3 = digitalRead(D7);
 
-  
   if (d1 == 1 && d2 == 1 && d3 == 1) {
-    state = "off";
+    new_state = "0";
   }
   else if(d1 == 0 && d2 == 1 && d3 == 0) {
-    state = "1";
+    new_state = "1";
   }
   else if(d1 == 1 && d2 == 0 && d3 == 1) {
-    state = "2";
+    new_state = "2";
   }
   else if(d1 == 0 && d2 == 1 && d3 == 1) {
-    state = "3";
+    new_state = "3";
   }
   else if(d1 == 1 && d2 == 1 && d3 == 0) {
-    state = "empty";
+    new_state = "empty";
   }
   else {
-    state = "unknown";
+    new_state = "unknown";
+  }
+  if (new_state != state) {
+    state = new_state;
+    report_state();
   }
   Serial.println(state);
 }
@@ -160,8 +170,9 @@ void change_state() {
 }
 
 void setup() {
+  delay(5000);
   pinMode(D0, OUTPUT);
-  pinMode(BUILTIN_LED, OUTPUT);
+  // pinMode(BUILTIN_LED, OUTPUT);
   pinMode(D5, INPUT);
   pinMode(D6, INPUT);
   pinMode(D7, INPUT);
@@ -188,26 +199,27 @@ void loop() {
     lastMsg = now;
 
     change_state();
+    delay(50);
+    read_state();
 
-    // snprintf (msg, 50, "hello world #%ld", value);
-    Serial.println("State changed ");
-    
-  }
+    Serial.print("State changed ");
+    Serial.println(state);
 
-  read_state();
-
-  if (now - lastPublish > 10000) {
-    lastPublish = now;
     char copy[50];
     state.toCharArray(copy, 50);
     client.publish(outTopic, copy);
   }
 
+  read_state();
+
+  if (now - lastPublish > 30000) {
+    lastPublish = now;
+    report_state();
+  }
   
   if (state == target_state) {
     do_change_state = false;
   }
-  
 
   Serial.println();
   delay(1000);
