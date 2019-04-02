@@ -20,6 +20,7 @@
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
+#include <ArduinoOTA.h>
 
 // Update these with values suitable for your network.
 
@@ -32,6 +33,7 @@ const char* outTopic = "humidifier/state";
 String state;
 String new_state;
 String target_state;
+String free_heap;
 bool do_change_state = false;
 
 WiFiClient espClient;
@@ -63,6 +65,30 @@ void setup_wifi() {
   Serial.println("");
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void setup_ota() {
+  ArduinoOTA.onStart([]() {
+    Serial.println("Start");
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
+  ArduinoOTA.begin();
+  Serial.println("Ready");  //  "Готово"
+  Serial.print("IP address: ");  //  "IP-адрес: "
   Serial.println(WiFi.localIP());
 }
 
@@ -128,6 +154,10 @@ void report_state() {
   char copy[50];
   state.toCharArray(copy, 50);
   client.publish(outTopic, copy);
+
+  free_heap = ESP.getFreeHeap();
+  free_heap.toCharArray(copy, 50);
+  client.publish("humidifier/memory", copy);
 }
 
 void read_state() {
@@ -157,7 +187,7 @@ void read_state() {
     state = new_state;
     report_state();
   }
-  Serial.println(state);
+  // Serial.println(state);
 }
 
 void change_state() {
@@ -178,6 +208,7 @@ void setup() {
   pinMode(D7, INPUT);
   Serial.begin(115200);
   setup_wifi();
+  setup_ota();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
 
@@ -188,6 +219,7 @@ void setup() {
 }
 
 void loop() {
+  ArduinoOTA.handle();
 
   if (!client.connected()) {
     reconnect();
@@ -221,6 +253,5 @@ void loop() {
     do_change_state = false;
   }
 
-  Serial.println();
   delay(1000);
 }
