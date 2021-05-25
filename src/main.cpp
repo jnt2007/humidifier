@@ -48,11 +48,11 @@ int d3;
 void setup_wifi() {
 
   delay(10);
-  // We start by connecting to a WiFi network
-  Serial.println();
   Serial.print("Connecting to ");
   Serial.println(ssid);
 
+  WiFi.disconnect();
+  WiFi.hostname("humidifier");
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
@@ -87,12 +87,12 @@ void setup_ota() {
     else if (error == OTA_END_ERROR) Serial.println("End Failed");
   });
   ArduinoOTA.begin();
-  Serial.println("Ready");  //  "Готово"
-  Serial.print("IP address: ");  //  "IP-адрес: "
+  Serial.println("Ready");
+  Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
+void callback(char* topic, byte* payload, int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("] ");
@@ -103,7 +103,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print(res);
   Serial.println();
 
-  
+
   if (state != "empty") {
     // Switch state if updated
     if (res != state) {
@@ -136,8 +136,6 @@ void reconnect() {
     // Attempt to connect
     if (client.connect(clientId.c_str(), mqtt_user, mqtt_password)) {
       Serial.println("connected");
-      // Once connected, publish an announcement...
-      client.publish(outTopic, "hello world");
       // ... and resubscribe
       client.subscribe("humidifier/command");
     } else {
@@ -154,10 +152,6 @@ void report_state() {
   char copy[50];
   state.toCharArray(copy, 50);
   client.publish(outTopic, copy);
-
-  free_heap = ESP.getFreeHeap();
-  free_heap.toCharArray(copy, 50);
-  client.publish("humidifier/memory", copy);
 }
 
 void read_state() {
@@ -191,17 +185,20 @@ void read_state() {
 }
 
 void change_state() {
-  digitalWrite(D0, HIGH);
+  pinMode(D0, INPUT);
   delay(50);
-  digitalWrite(D0, LOW);
+  pinMode(D0, OUTPUT);
+  // digitalWrite(D0, HIGH);
+  // delay(50);
+  // digitalWrite(D0, LOW);
   // digitalWrite(BUILTIN_LED, LOW);
   // delay(50);
   // digitalWrite(BUILTIN_LED, HIGH);
 }
 
 void setup() {
-  delay(5000);
-  pinMode(D0, OUTPUT);
+  delay(3000);
+  // pinMode(D0, OUTPUT);
   // pinMode(BUILTIN_LED, OUTPUT);
   pinMode(D5, INPUT);
   pinMode(D6, INPUT);
@@ -220,6 +217,10 @@ void setup() {
 
 void loop() {
   ArduinoOTA.handle();
+
+  if (WiFi.status() != WL_CONNECTED) {
+    setup_wifi();
+  }
 
   if (!client.connected()) {
     reconnect();
@@ -252,6 +253,4 @@ void loop() {
   if (state == target_state) {
     do_change_state = false;
   }
-
-  delay(1000);
 }
